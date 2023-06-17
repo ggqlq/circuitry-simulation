@@ -28,16 +28,22 @@ class Instrument {
     constructor(obj = {
         x: 0,
         y: 0,
-        height: 100
+        height: 100,
+        width: 100
     }) {
         this.height = obj.height;
-        this.width = 0.75 * obj.height;
+        this.width = obj.width;
         this.id = -1;
         this.connectors = new Map;
         this.group = new Konva.Group({
             x: obj.x,
             y: obj.y,
             draggable: true
+        })
+    }
+    destroy() {
+        this.group.getChildren().each((v) => {
+            v.off();
         })
     }
 }
@@ -48,7 +54,8 @@ class Meter extends Instrument{
     constructor(obj = {
         x: 0,
         y: 0,
-        height :100,
+        height: 100,
+        width: 100,
         connectorColor: 'red',
         connectorSize: -1,
         backgroundColor: 'white',
@@ -123,10 +130,11 @@ class Voltmeter extends Meter{
             x: x,
             y: y,
             height: height,
+            width: 0.75 * height,
             connectorColor: 'red',
             backgroundColor: 'rgba(200, 255, 255, 1)',
             nameArr: [ '-','+15','+3' ],
-        });  //继承父类instrument构造函数，继承了两个属性height和width
+        });  //
         this.connectors.get('+15').addResistanceTo(this.connectors.get('-'), 150000);
         this.connectors.get('+3').addResistanceTo(this.connectors.get('-'), 30000);  //设置电表内部阻值
     }
@@ -138,12 +146,70 @@ class Ammeter extends Meter {
             x: x,
             y: y,
             height: height,
+            width: 0.75 * height,
             connectorColor: 'red',
             backgroundColor: 'rgba(255, 210, 210, 1)',
             nameArr: [ '-','+0.6','+3' ],
         })
         this.connectors.get('+3').addResistanceTo(this.connectors.get('-'), 0.02);
         this.connectors.get('+0.6').addResistanceTo(this.connectors.get('-'), 0.02);  //设置电表内部阻值
+    }
+}
+
+class Resistor extends Instrument {
+    #value
+    constructor(obj) {
+        super({
+            x: obj.x,
+            y: obj.y,
+            height: obj.height,
+            width: 2 * obj.height,
+        })
+        obj.connectorSize = obj.connectorSize == undefined ?  this.height * 0.1 : obj.connectorSize;
+        obj.connectorColor = obj.connectorColor == undefined ? 'red' : obj.connectorColor;
+        this.#value = obj.value == undefined ? 100 : obj.value;//默认阻值100
+        this.height = obj.height;
+        this.width = 2 * obj.height
+        this.connectors.set('1', new Connector(this.width * 0.1, 0.9 * this.height));
+        this.connectors.set('2', new Connector(this.width * 0.9, 0.9 * this.height));//添加接线柱对象
+        this.connectors.get('1').addResistanceTo(this.connectors.get('2'), this.#value);
+        this.connectors.get('2').addResistanceTo(this.connectors.get('1'), this.#value);//设置阻值
+        var img = new Image();
+        img.src = "./assets/img/resistor.png";
+        img.onload = () => {
+            this.group.add(new Konva.Image({
+                x: 0,
+                y: 0,
+                image: img,
+                width: this.width,
+                height: this.height
+            }));//加载图片
+            this.connectors.forEach((v, k) => {
+                //在图片加载完成后加入接线柱，防止接线柱被图片阻挡无法响应事件
+                let t = new Konva.Circle({
+                    x: v.x,
+                    y: v.y,
+                    radius: obj.connectorSize,
+                    fill: obj.connectorColor,
+                    stroke: 'black'
+                });
+                this.group.add(t);
+                t.moveUp();
+                t.on('mouseover', function() {
+                    t.fill('black');
+                });
+                t.on('mouseout', function() {
+                    t.fill(obj.connectorColor);
+                });
+            })
+        }
+    }
+    getValue() {
+        return this.#value;
+    }
+    setValue(newValue) {
+        this.#value = newValue;
+        return this.value;
     }
 }
 
@@ -172,6 +238,7 @@ class Table {
         return this.#instruments.length;
     }
     reDraw() {
+        //定期刷新屏幕
         this.layer.batchDraw();
         requestAnimationFrame(this.reDraw.bind(this));
     }
@@ -180,7 +247,8 @@ class Table {
         if (id < 0 || id > this.#instruments.length - 1) {
             return -1;
         }
-        this.#instruments[id].shape.remove();
+        this.#instruments[id].destroy();
+        this.#instruments[id].group.remove();
         this.#instruments.splice(id, 1);
         this.length = this.update();
         this.layer.batchDraw();

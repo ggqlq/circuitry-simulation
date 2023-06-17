@@ -32,6 +32,11 @@ var t = new Table(front);
 //t.addInstrument(new voltmeter((window.innerWidth - window.innerHeight * 0.5 * 0.75) / 2, (window.innerHeight - window.innerHeight * 0.5) / 2, window.innerHeight * 0.5));
 t.addInstrument(new Voltmeter(200, 200, 100));
 t.addInstrument(new Ammeter(300, 300, 100));
+t.addInstrument(new Resistor({
+    x: 400,
+    y: 400,
+    height: 50
+}));
 
 function drawGrid(layer, gridSize) {
     const width = window.innerWidth;
