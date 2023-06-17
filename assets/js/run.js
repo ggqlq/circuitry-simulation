@@ -24,7 +24,8 @@ background.draw();
 var front = new Konva.Layer();
 stage.add(front);
 
-
+var con = new Konva.Layer();
+stage.add(con);
 
 
 
@@ -37,6 +38,9 @@ t.addInstrument(new Resistor({
     y: 400,
     height: 50
 }));
+
+//t.removeInstrumentById(0);
+var c = new Console(con, t);
 
 function drawGrid(layer, gridSize) {
     const width = window.innerWidth;

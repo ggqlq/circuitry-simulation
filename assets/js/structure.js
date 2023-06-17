@@ -255,3 +255,25 @@ class Table {
         return this.length;
     }
 }
+
+class Console {
+    //控制台类，明天再写
+    constructor(layer, table) {
+        this.layer = layer;
+        this.table = table;
+        this.layer.add(new Konva.Rect({
+            x: 0,
+            y: window.innerHeight * 0.8,
+            width: window.innerWidth,
+            height: window.innerHeight * 0.2,
+            fill: 'rgba(144, 144, 144, 1)'
+        }));
+        layer.moveToTop();
+        this.layer.batchDraw();
+    }
+    reDraw() {
+        //定期刷新屏幕
+        this.layer.batchDraw();
+        requestAnimationFrame(this.reDraw.bind(this));
+    }
+}
