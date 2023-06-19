@@ -31,6 +31,7 @@ class Instrument {
         height: 100,
         width: 100
     }) {
+        this.obj = obj;
         this.height = obj.height;
         this.width = obj.width;
         this.id = -1;
@@ -39,6 +40,17 @@ class Instrument {
             x: obj.x,
             y: obj.y,
             draggable: true
+        })
+        this.connectorShape = new Array();
+        this.initPromise = Promise.resolve();
+    }
+    loadImg(src) {
+        //用来加载图片并创建Promise
+        return new Promise((resolve, reject) => {
+            var img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src;
         })
     }
     destroy() {
@@ -61,7 +73,7 @@ class Meter extends Instrument{
         backgroundColor: 'white',
         nameArr: []
     }) {
-        super(obj);  //继承父类instrument构造函数，继承了两个属性height和width以及一个konval组对象
+        super(obj);  //继承父类instrument构造函数，继承了两个属性height和width以及一个konval组对象以及一个存储接线柱图形的数组
         obj.connectorSize = obj.connectorSize ==  undefined ? this.height * 0.05 : obj.connectorSize;
         for (let i = 0; i <= obj.nameArr.length - 1; ++i) {
             this.connectors.set(obj.nameArr[i], new Connector((this.width * 0.1 + (this.width * 0.8 / (obj.nameArr.length - 1)) * i), 0.85 * this.height));
@@ -89,6 +101,10 @@ class Meter extends Instrument{
             t.on('mouseout', function() {
                 t.fill(obj.connectorColor);
             });
+            /*t.on('click', () => {
+                t.dispatchEvent(new CustomEvent('connectorClick', {detail: this}));
+            })*/
+            this.connectorShape.push(t);
             this.group.add(t);
             this.group.add(new Konva.Text({
                 x: v.x,
@@ -159,14 +175,10 @@ class Ammeter extends Meter {
 class Resistor extends Instrument {
     #value
     constructor(obj) {
-        super({
-            x: obj.x,
-            y: obj.y,
-            height: obj.height,
-            width: 2 * obj.height,
-        })
-        obj.connectorSize = obj.connectorSize == undefined ?  this.height * 0.1 : obj.connectorSize;
-        obj.connectorColor = obj.connectorColor == undefined ? 'red' : obj.connectorColor;
+        super(obj);
+        this.obj = obj;
+        this.obj.connectorSize = obj.connectorSize == undefined ?  this.height * 0.1 : obj.connectorSize;
+        this.obj.connectorColor = obj.connectorColor == undefined ? 'red' : obj.connectorColor;
         this.#value = obj.value == undefined ? 100 : obj.value;//默认阻值100
         this.height = obj.height;
         this.width = 2 * obj.height
@@ -174,9 +186,12 @@ class Resistor extends Instrument {
         this.connectors.set('2', new Connector(this.width * 0.9, 0.9 * this.height));//添加接线柱对象
         this.connectors.get('1').addResistanceTo(this.connectors.get('2'), this.#value);
         this.connectors.get('2').addResistanceTo(this.connectors.get('1'), this.#value);//设置阻值
-        var img = new Image();
-        img.src = "./assets/img/resistor.png";
-        img.onload = () => {
+        this.initPromise = this.init();
+    }
+    async init() {
+        //等待图片加载完成后再进行其他操作
+        try {
+            var img = await this.loadImg("./assets/img/resistor.png");
             this.group.add(new Konva.Image({
                 x: 0,
                 y: 0,
@@ -184,25 +199,37 @@ class Resistor extends Instrument {
                 width: this.width,
                 height: this.height
             }));//加载图片
-            this.connectors.forEach((v, k) => {
-                //在图片加载完成后加入接线柱，防止接线柱被图片阻挡无法响应事件
-                let t = new Konva.Circle({
-                    x: v.x,
-                    y: v.y,
-                    radius: obj.connectorSize,
-                    fill: obj.connectorColor,
-                    stroke: 'black'
-                });
-                this.group.add(t);
-                t.moveUp();
-                t.on('mouseover', function() {
-                    t.fill('black');
-                });
-                t.on('mouseout', function() {
-                    t.fill(obj.connectorColor);
-                });
-            })
+            
         }
+        catch(error) {
+            console.error('Failed to load image:', error);
+        }
+        this.connectors.forEach((v, k) => {
+            //在图片加载完成后加入接线柱，防止接线柱被图片阻挡无法响应事件
+            let t = new Konva.Circle({
+                x: v.x,
+                y: v.y,
+                radius: this.obj.connectorSize,
+                fill: this.obj.connectorColor,
+                stroke: 'black'
+            });
+            this.group.add(t);
+            t.moveUp();
+            t.on('mouseover', function() {
+                t.fill('black');
+            });
+            t.on('mouseout', () => {
+                //此处应使用箭头函数确保this指向正确
+                t.fill(this.obj.connectorColor);
+            });
+            /*t.on('click', () => {
+                t.dispatchEvent(new CustomEvent('connectorClick', {detail: this}));
+            })*/
+            //console.log(this.connectorShape);
+            //console.log(t);
+            this.connectorShape.push(t);
+            //console.log(this.connectorShape.length);
+        })
     }
     getValue() {
         return this.#value;
@@ -213,12 +240,21 @@ class Resistor extends Instrument {
     }
 }
 
+class Wire {
+    connectors(start, end) {
+        
+    }
+}
+
 class Table {
     #instruments
+    #wires
     constructor(layer) {
         this.#instruments = new Array();
+        this.#wires = new Array();
         this.length = 0;
         this.layer = layer;
+        this.firstConnector = null;
         this.reDraw();
         //stage.add(this.layer);
     }
@@ -228,7 +264,23 @@ class Table {
         newInstrument.id = this.#instruments.length - 1;
         this.length = this.update();
         this.layer.add(newInstrument.group);
+        newInstrument.initPromise.then(() => {
+            console.log(newInstrument.connectorShape.length)
+            newInstrument.connectorShape.forEach(c => {
+            console.log(c);
+            c.addEventListener('click', () => {
+                if (this.firstConnector == null) {
+                    this.firstConnector = c;
+                    console.log(typeof(this.firstConnector));
+                }
+                else {
+                    this.addWire(this.firstConnector, c);
+                    this.firstConnector = null;
+                }
+            })
+        })
         this.layer.batchDraw();
+        })
     }
     update() {
         for (var i = 0; i <= this.#instruments.length - 1; ++i) {
@@ -253,6 +305,13 @@ class Table {
         this.length = this.update();
         this.layer.batchDraw();
         return this.length;
+    }
+    addWire(start, end) {
+        console.log([start.x, start.y, end.x, end.y]);
+        let t = new Konva.Line({
+            points: [start.x, start.y, end.x, end.y],
+            stroke: 'black'
+        });
     }
 }
 
