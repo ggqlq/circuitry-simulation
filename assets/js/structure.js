@@ -123,12 +123,13 @@ class Meter extends Instrument{
             fill: 'white',
             stroke: 'black'
         }))
-        this.group.add(new Konva.Text({
+        this.text = new Konva.Text({
             x: (this.width * 0.1) / 2,
             y: (this.height / 2) * 0.1,
             text: String(this.#value),
             fontSize: this.height / 2
-        }))
+        });
+        this.group.add(this.text);
     }
     getValue() {
         //读取电表读数
@@ -137,6 +138,7 @@ class Meter extends Instrument{
     setValue(v) {
         //设置电表读数
         this.#value = v;
+        this.text.text(String(this.#value));
         return this.#value;
     }
 }
@@ -202,8 +204,7 @@ class Resistor extends Instrument {
                 height: this.height
             }));//加载图片
             
-        }
-        catch(error) {
+        } catch(error) {
             console.error('Failed to load image:', error);
         }
         this.connectors.forEach((v, k) => {
@@ -294,7 +295,7 @@ class Power extends Instrument {
     }
 }
 
-class circuitChange extends Instrument {
+class CircuitChange extends Instrument {
     #state
     constructor(obj) {
         super(obj);
@@ -352,16 +353,19 @@ class circuitChange extends Instrument {
                 rotation: -45
             })
             this.group.add(this.switchRect);
-        }
-        catch(error) {
+        } catch(error) {
             console.error('Failed to load image:', error);
+            return error;
         }
+        
     }
     changeState() {
         if (this.#state) {
             this.#state = false;
             this.switchRect.rotation(-45);
-            this.connectors.clear();
+            this.connectors.forEach(c => {
+                c.resistanceTo.clear();
+            })
         }
         else {
             this.#state = true;
@@ -372,13 +376,81 @@ class circuitChange extends Instrument {
     }
 }
 
+class SlideResistor extends Instrument {
+    #maxValue;
+    #nowValue;
+    constructor(obj) {
+        super(obj);
+        this.width = this.height * 2;
+        this.obj = obj;
+        this.obj.connectorSize = obj.connectorSize ==  undefined ? this.height * 0.05 : obj.connectorSize;
+        this.obj.connectorColor = obj.connectorColor ==  undefined ? 'red' : obj.connectorSize;
+        this.width = 1.5 * this.height;
+        this.#maxValue = obj.maxValue == undefined ? 1000 : obj.maxValue;
+        this.#nowValue = 0;
+        this.connectors.set("1", new Connector(this.width * 0.1, 0.6 * this.height));
+        this.connectors.set("2", new Connector(this.width * 0.9, 0.6 * this.height));
+        this.connectors.set("3", new Connector(this.width * 0.97, 0.25 * this.height));
+        this.connectors.get('1').addResistanceTo(this.connectors.get('2'),this.#maxValue);
+        this.connectors.get('2').addResistanceTo(this.connectors.get('1'),this.#maxValue);
+        this.connectors.get('1').addResistanceTo(this.connectors.get('3'), this.#nowValue);
+        this.connectors.get('3').addResistanceTo(this.connectors.get('1'), this.#nowValue);
+        this.connectors.get('2').addResistanceTo(this.connectors.get('3'), this.#maxValue - this.#nowValue);
+        this.connectors.get('3').addResistanceTo(this.connectors.get('2'), this.#maxValue - this.#nowValue);
+        this.initPromise = this.init();
+    }
+    async init() {
+        try {
+            let img = await this.loadImg('./assets/img/slide-resistor.png');
+            this.group.add(new Konva.Image({
+                x: 0,
+                y: 0,
+                height: this.height,
+                width: this.width,
+                image: img
+            }))
+        } catch(error) {
+            console.error('图片加载失败:', error);
+            return error;
+        }
+        this.connectors.forEach((v, k) => {
+            let t = new Konva.Circle({
+                x: v.x,
+                y: v.y,
+                radius: this.obj.connectorSize,
+                fill: this.obj.connectorColor,
+                stroke: 'black'
+            });
+            this.group.add(t);
+            t.moveUp();
+            t.on('mouseover', function() {
+                t.fill('black');
+            });
+            t.on('mouseout', () => {
+                //此处应使用箭头函数确保this指向正确
+                t.fill(this.obj.connectorColor);
+            });
+            this.connectorShape.set(t, v);
+        });
+        this.slider = new Konva.Rect({
+            x: 0.1 * this.width,
+            y: 0.25 * this.height,
+            draggable: true,
+            height: this.height * 0.2,
+            width: this.height * 0.2,
+            fill: 'black'
+        });
+        this.group.add(this.slider);
+    }
+}
+
 class Wire {
 
 }
 
 class Table {
-    #instruments
-    #wires
+    #instruments;
+    #wires;
     constructor(layer) {
         this.#instruments = new Array();
         this.#wires = new Array();
@@ -446,6 +518,12 @@ class Table {
         start.addWire(end);
         start.addResistanceTo(end);
         end.addResistanceTo(start);
+    }
+    getInstrumentById(id) {
+        if (id < 0 || id > this.#instruments.length - 1) {
+            return undefined;
+        }
+        return this.#instruments[id];
     }
 }
 

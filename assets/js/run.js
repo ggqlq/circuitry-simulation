@@ -44,11 +44,17 @@ t.addInstrument(new Power({
     height:50,
 }))
 
-t.addInstrument(new circuitChange({
+t.addInstrument(new CircuitChange({
     x: 500,
     y: 200,
     height:50,
 }))
+t.addInstrument(new SlideResistor({
+    x: 100,
+    y: 150,
+    height: 100
+}))
+t.getInstrumentById(0).setValue(10);
 //t.removeInstrumentById(0);
 var c = new Console(con, t);
 
