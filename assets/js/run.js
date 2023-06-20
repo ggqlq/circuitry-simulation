@@ -38,7 +38,17 @@ t.addInstrument(new Resistor({
     y: 400,
     height: 50
 }));
+t.addInstrument(new Power({
+    x: 500,
+    y: 200,
+    height:50,
+}))
 
+t.addInstrument(new circuitChange({
+    x: 500,
+    y: 200,
+    height:50,
+}))
 //t.removeInstrumentById(0);
 var c = new Console(con, t);
 

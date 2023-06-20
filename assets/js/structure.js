@@ -31,19 +31,21 @@ class Instrument {
         height: 100,
         width: 100
     }) {
+        //obj.connectorSize = obj.connectorSize ==  undefined ? this.height * 0.05 : obj.connectorSize;
         this.obj = obj;
         this.height = obj.height;
         this.width = obj.width;
         this.id = -1;
-        this.connectors = new Map;
+        this.connectors = new Map;//key为接线柱名称，value为接线柱对象
         this.group = new Konva.Group({
             x: obj.x,
             y: obj.y,
             draggable: true
         })
-        this.connectorShape = new Array();
+        this.connectorShape = new Map();//key为图形对象，value为接线柱对象
         this.initPromise = Promise.resolve();
     }
+    
     loadImg(src) {
         //用来加载图片并创建Promise
         return new Promise((resolve, reject) => {
@@ -104,7 +106,7 @@ class Meter extends Instrument{
             /*t.on('click', () => {
                 t.dispatchEvent(new CustomEvent('connectorClick', {detail: this}));
             })*/
-            this.connectorShape.push(t);
+            this.connectorShape.set(t, v);
             this.group.add(t);
             this.group.add(new Konva.Text({
                 x: v.x,
@@ -222,13 +224,7 @@ class Resistor extends Instrument {
                 //此处应使用箭头函数确保this指向正确
                 t.fill(this.obj.connectorColor);
             });
-            /*t.on('click', () => {
-                t.dispatchEvent(new CustomEvent('connectorClick', {detail: this}));
-            })*/
-            //console.log(this.connectorShape);
-            //console.log(t);
-            this.connectorShape.push(t);
-            //console.log(this.connectorShape.length);
+            this.connectorShape.set(t, v);
         })
     }
     getValue() {
@@ -240,10 +236,144 @@ class Resistor extends Instrument {
     }
 }
 
-class Wire {
-    connectors(start, end) {
-        
+class Power extends Instrument {
+    #value;
+    constructor(obj) {
+        obj.backgroundColor = 'rgb(195, 135, 215)';
+        super(obj);
+        this.width = this.height * 2;
+        obj.connectorSize = obj.connectorSize ==  undefined ? this.height * 0.1 : obj.connectorSize;
+        obj.connectorColor = obj.connectorColor ==  undefined ? 'red' : obj.connectorSize;
+        this.#value = 50;
+        //this.connectors.set("+", new Connector(10, 10));
+        this.connectors.set("+", new Connector(this.width * 0.1, 0.85 * this.height));
+        this.connectors.set("-", new Connector(this.width * 0.9, 0.85 * this.height));
+        this.group.add(new Konva.Rect({
+            x: 0,
+            y: 0,
+            height: this.height,
+            width: this.width,
+            connectorSize: 0.05 * this.height,
+            fill: obj.backgroundColor,
+            stroke: 'black'
+        }));
+        this.group.add(new Konva.Rect({
+            x: this.width * 0.1,
+            y: this.height * 0.1,
+            height: this.height * 0.4,
+            width: this.width * 0.8,
+            fill: 'white',
+            stroke: 'black'
+        }));
+        this.group.add(new Konva.Text({
+            x: this.width * 0.1,
+            y: this.height * 0.1,
+            fontSize: this.height * 0.4,
+            text: String(this.#value) + 'V',
+            fill: 'red'
+        }));
+        this.connectors.forEach((v, k) => {
+            let t = new Konva.Circle({
+                x: v.x,
+                y: v.y,
+                radius: obj.connectorSize,
+                fill: obj.connectorColor,
+                stroke: 'black'
+            });
+            this.group.add(t);
+            t.moveUp();
+            t.on('mouseover', function() {
+                t.fill('black');
+            });
+            t.on('mouseout', () => {
+                //此处应使用箭头函数确保this指向正确
+                t.fill(obj.connectorColor);
+            });
+            this.connectorShape.set(t, v);
+        })
     }
+}
+
+class circuitChange extends Instrument {
+    #state
+    constructor(obj) {
+        super(obj);
+        this.obj = obj;
+        this.obj.connectorSize = obj.connectorSize ==  undefined ? this.height * 0.1 : obj.connectorSize;
+        this.obj.connectorColor = obj.connectorColor ==  undefined ? 'red' : obj.connectorSize;
+        this.#state = false //false表示断开，true表示闭合
+        this.width = 2 * this.height;
+        let t = this.width;
+        this.connectors.set('1', new Connector(this.width * 0.2, this.height * 0.8));
+        this.connectors.set('2', new Connector(this.width * 0.8, this.height * 0.8));
+        this.initPromise = this.init();
+    }
+    async init() {
+        //等待图片加载完成后再进行其他操作
+        try {
+            var img = await this.loadImg("./assets/img/switch.png");
+            let konvaimg = new Konva.Image({
+                x: 0,
+                y: 0,
+                image: img,
+                width: this.width,
+                height: this.height
+            })
+            this.group.add(konvaimg);//加载图片
+            konvaimg.on('click', () => {
+                this.changeState();
+            })
+            this.connectors.forEach((v, k) => {
+            //在图片加载完成后加入接线柱，防止接线柱被图片阻挡无法响应事件
+                let t = new Konva.Circle({
+                    x: v.x,
+                    y: v.y,
+                    radius: this.obj.connectorSize,
+                    fill: this.obj.connectorColor,
+                    stroke: 'black'
+                });
+                this.group.add(t);
+                t.moveUp();
+                t.on('mouseover', function() {
+                    t.fill('black');
+                });
+                t.on('mouseout', () => {
+                    //此处应使用箭头函数确保this指向正确
+                    t.fill(this.obj.connectorColor);
+                });
+                this.connectorShape.set(t, v);
+            });
+            this.switchRect = new Konva.Rect({
+                x: this.width * 0.2,
+                y: this.height * 0.5,
+                height: this.height * 0.1,
+                width: this.width * 0.6,
+                fill: 'black',
+                rotation: -45
+            })
+            this.group.add(this.switchRect);
+        }
+        catch(error) {
+            console.error('Failed to load image:', error);
+        }
+    }
+    changeState() {
+        if (this.#state) {
+            this.#state = false;
+            this.switchRect.rotation(-45);
+            this.connectors.clear();
+        }
+        else {
+            this.#state = true;
+            this.switchRect.rotation(0);
+            this.connectors.get('1').addResistanceTo(this.connectors.get('2'), 0);
+            this.connectors.get('2').addResistanceTo(this.connectors.get('1'), 0);
+        }
+    }
+}
+
+class Wire {
+
 }
 
 class Table {
@@ -265,16 +395,15 @@ class Table {
         this.length = this.update();
         this.layer.add(newInstrument.group);
         newInstrument.initPromise.then(() => {
-            console.log(newInstrument.connectorShape.length)
-            newInstrument.connectorShape.forEach(c => {
-            console.log(c);
-            c.addEventListener('click', () => {
+            newInstrument.connectorShape.forEach((v, k) => {
+                //k为图像对象，v为接线柱对象
+            k.addEventListener('click', () => {
                 if (this.firstConnector == null) {
-                    this.firstConnector = c;
+                    this.firstConnector = {shape: k, object: v};
                     console.log(typeof(this.firstConnector));
                 }
                 else {
-                    this.addWire(this.firstConnector, c);
+                    this.addWire(this.firstConnector.shape, k, this.firstConnector.object, v);
                     this.firstConnector = null;
                 }
             })
@@ -306,12 +435,17 @@ class Table {
         this.layer.batchDraw();
         return this.length;
     }
-    addWire(start, end) {
-        console.log([start.x, start.y, end.x, end.y]);
+    addWire(startShape, endShape, start, end) {
+        //console.log(start.x);
+        let s = startShape.getAbsolutePosition(), e = endShape.getAbsolutePosition();
         let t = new Konva.Line({
-            points: [start.x, start.y, end.x, end.y],
+            points: [s.x, s.y, e.x, e.y],
             stroke: 'black'
         });
+        this.layer.add(t);
+        start.addWire(end);
+        start.addResistanceTo(end);
+        end.addResistanceTo(start);
     }
 }
 
