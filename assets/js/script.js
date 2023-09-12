@@ -5,3 +5,6 @@ window.onresize = function (e) {
     backgroundRect.height(stage.height());
     stage.batchDraw();
 }
+window.onload = () => {
+    t.reDraw();
+}

@@ -127,7 +127,7 @@ class Meter extends Instrument{
             x: (this.width * 0.1) / 2,
             y: (this.height / 2) * 0.1,
             text: String(this.#value),
-            fontSize: this.height / 2
+            fontSize: this.height / 4
         });
         this.group.add(this.text);
     }
@@ -357,7 +357,6 @@ class CircuitChange extends Instrument {
             console.error('Failed to load image:', error);
             return error;
         }
-        
     }
     changeState() {
         if (this.#state) {
@@ -373,6 +372,9 @@ class CircuitChange extends Instrument {
             this.connectors.get('1').addResistanceTo(this.connectors.get('2'), 0);
             this.connectors.get('2').addResistanceTo(this.connectors.get('1'), 0);
         }
+    }
+    getState() {
+        return this.#state;
     }
 }
 
@@ -397,6 +399,7 @@ class SlideResistor extends Instrument {
         this.connectors.get('3').addResistanceTo(this.connectors.get('1'), this.#nowValue);
         this.connectors.get('2').addResistanceTo(this.connectors.get('3'), this.#maxValue - this.#nowValue);
         this.connectors.get('3').addResistanceTo(this.connectors.get('2'), this.#maxValue - this.#nowValue);
+        this.group.draggable(false);
         this.initPromise = this.init();
     }
     async init() {
@@ -438,9 +441,24 @@ class SlideResistor extends Instrument {
             draggable: true,
             height: this.height * 0.2,
             width: this.height * 0.2,
-            fill: 'black'
+            fill: 'black',
+            dragBoundFunc: function(pos) {
+                return {
+                x: pos.x,
+                y: this.absolutePosition().y
+                };
+            }
         });
         this.group.add(this.slider);
+        this.slider.on('dragmove', () => {
+            var groupPos = this.group.getAbsolutePosition();
+            console.log(this.group.width());
+            this.#nowValue = ((this.slider.getAbsolutePosition().x - groupPos.x) / this.obj.height * 1.5) * this.#maxValue;
+            console.log(this.#nowValue);
+        })
+    }
+    getValue() {
+        return this.#nowValue;
     }
 }
 
@@ -457,7 +475,10 @@ class Table {
         this.length = 0;
         this.layer = layer;
         this.firstConnector = null;
-        this.reDraw();
+        window.onload = () => {
+            t.reDraw();
+        }
+        //this.reDraw();
         //stage.add(this.layer);
     }
     addInstrument(newInstrument) {
@@ -493,6 +514,7 @@ class Table {
     reDraw() {
         //定期刷新屏幕
         this.layer.batchDraw();
+        countLimited(true);
         requestAnimationFrame(this.reDraw.bind(this));
     }
     removeInstrumentById(id) {
